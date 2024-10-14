@@ -773,10 +773,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(SIGNAL_LAMP_Pin_GPIO_Port, SIGNAL_LAMP_Pin_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, TM_CLK_Pin|TM_DIO_Pin|GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, TM_CLK_Pin|TM_DIO_Pin|GPIO_PIN_2, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : SIGNAL_LAMP_Pin_Pin */
   GPIO_InitStruct.Pin = SIGNAL_LAMP_Pin_Pin;
@@ -785,26 +782,31 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SIGNAL_LAMP_Pin_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : TM_CLK_Pin TM_DIO_Pin PB2 PB3 */
-  GPIO_InitStruct.Pin = TM_CLK_Pin|TM_DIO_Pin|GPIO_PIN_2|GPIO_PIN_3;
+  /*Configure GPIO pins : TM_CLK_Pin TM_DIO_Pin PB2 */
+  GPIO_InitStruct.Pin = TM_CLK_Pin|TM_DIO_Pin|GPIO_PIN_2;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB12 PB13 PB14 PB15
+  /*Configure GPIO pins : PB12 PB13 PB14 PB3
                            Bt_UP_Pin Bt_DOWN_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15
+  GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_3
                           |Bt_UP_Pin|Bt_DOWN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA15 */
   GPIO_InitStruct.Pin = GPIO_PIN_15;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
