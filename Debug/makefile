@@ -60,6 +60,9 @@ default.size.stdout \
 OBJDUMP_LIST += \
 acc_rpm_stm32f103c8t6.list \
 
+OBJCOPY_BIN += \
+acc_rpm_stm32f103c8t6.bin \
+
 
 # All Target
 all: main-build
@@ -68,8 +71,8 @@ all: main-build
 main-build: acc_rpm_stm32f103c8t6.elf secondary-outputs
 
 # Tool invocations
-acc_rpm_stm32f103c8t6.elf acc_rpm_stm32f103c8t6.map: $(OBJS) $(USER_OBJS) C:\Users\chatc\Desktop\github\acc_rpm_stm32f103c8t6\acc_rpm_stm32f103c8t6\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "acc_rpm_stm32f103c8t6.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\chatc\Desktop\github\acc_rpm_stm32f103c8t6\acc_rpm_stm32f103c8t6\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="acc_rpm_stm32f103c8t6.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+acc_rpm_stm32f103c8t6.elf acc_rpm_stm32f103c8t6.map: $(OBJS) $(USER_OBJS) C:\Users\Chala\STM32CubeIDE\workspace_1.14.0\acc_rpm_stm32f103c8t6\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "acc_rpm_stm32f103c8t6.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\Chala\STM32CubeIDE\workspace_1.14.0\acc_rpm_stm32f103c8t6\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="acc_rpm_stm32f103c8t6.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -83,12 +86,17 @@ acc_rpm_stm32f103c8t6.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL
 	@echo 'Finished building: $@'
 	@echo ' '
 
+acc_rpm_stm32f103c8t6.bin: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-objcopy  -O binary $(EXECUTABLES) "acc_rpm_stm32f103c8t6.bin"
+	@echo 'Finished building: $@'
+	@echo ' '
+
 # Other Targets
 clean:
-	-$(RM) acc_rpm_stm32f103c8t6.elf acc_rpm_stm32f103c8t6.list acc_rpm_stm32f103c8t6.map default.size.stdout
+	-$(RM) acc_rpm_stm32f103c8t6.bin acc_rpm_stm32f103c8t6.elf acc_rpm_stm32f103c8t6.list acc_rpm_stm32f103c8t6.map default.size.stdout
 	-@echo ' '
 
-secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)
+secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST) $(OBJCOPY_BIN)
 
 fail-specified-linker-script-missing:
 	@echo 'Error: Cannot find the specified linker script. Check the linker settings in the build configuration.'
