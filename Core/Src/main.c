@@ -19,7 +19,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "fatfs.h"
-#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -27,6 +26,7 @@
 #include "math.h"
 #include <stdio.h>
 #include "ds1307_for_stm32_hal.h"
+#include "tm1637.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,6 +49,20 @@
 #define EEPROM_I2C &hi2c1
 
 #define CONFIG_ADDR 0x700
+
+#define MPU6050_ADDR 0xD0
+
+#define RAD_TO_DEG 57.295779513082320876798154814105
+
+#define WHO_AM_I_REG 0x75
+#define PWR_MGMT_1_REG 0x6B
+#define SMPLRT_DIV_REG 0x19
+#define ACCEL_CONFIG_REG 0x1C
+#define ACCEL_XOUT_H_REG 0x3B
+#define TEMP_OUT_H_REG 0x41
+#define acc_CONFIG_REG 0x1B
+#define acc_XOUT_H_REG 0x43
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -82,8 +96,11 @@ struct config {
 
 struct config Config;
 uint8_t sinnal_PWN;
-uint8_t MSG[100] = { '\0' };
+uint8_t MSG[50] = { '\0' };
 uint8_t X = 0;
+uint8_t gyloXYZ[14];
+const uint16_t i2c_timeout = 100;
+uint8_t Data;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,11 +109,11 @@ static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_CAN_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_RTC_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_RTC_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -104,6 +121,14 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+float genDegreefromAcc(float ac_value) {
+	return ac_value * 90;
+}
+uint8_t Getstategylo(float x, float y, float z, float torrent) {
+	uint8_t bufferx, buffery, bufferz, buffer_finish;
+	return buffer_finish;
+} // ใช้ตัวเลข 6 bit จากขวาสุด หลัก 1-3-5 แสดงสถานะว่าสมดุลหรือไม่  1 คือ x , 3 คือ y , 5 คือ z,0=สมดุุล,1=ไม่สมดุล พิจารณาจากว่าเกินค่า offset
+//หลัก 2-4-6 แสดงทิศทาง 0 คือบวก 1 คือลบ
 void EEPROM_Read(uint16_t page, uint16_t offset, uint8_t *data, uint16_t size) {
 	int paddrposition = log(PAGE_SIZE) / log(2);
 
@@ -156,6 +181,58 @@ void EEPROM_Write(uint16_t page, uint16_t offset, uint8_t *data, uint16_t size) 
 		HAL_Delay(5);  // Write cycle delay (5ms)
 	}
 }
+uint8_t MPU6050_Init(I2C_HandleTypeDef *I2Cx) {
+	uint8_t check;
+
+	// check device ID WHO_AM_I
+
+	HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, WHO_AM_I_REG, 1, &check, 1,
+			i2c_timeout);
+
+	if (check == 104) // 0x68 will be returned by the sensor if everything goes well
+			{
+		// power management register 0X6B we should write all 0's to wake the sensor up
+		Data = 0x0;
+		HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, PWR_MGMT_1_REG, 1, &Data, 1,
+				i2c_timeout);
+
+		// Set DATA RATE of 1KHz by writing SMPLRT_DIV register
+		Data = 0x00;
+		HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &Data, 1,
+				i2c_timeout);
+
+		Data = 0x00;
+		HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, 0x1A, 1, &Data, 1, i2c_timeout);
+		// Set accelerometer configuration in ACCEL_CONFIG Register
+		// XA_ST=0,YA_ST=0,ZA_ST=0, FS_SEL=0 -> � 2g
+
+		Data = 0x0;
+		HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, ACCEL_CONFIG_REG, 1, &Data, 1,
+				i2c_timeout);
+
+		// Set accscopic configuration in acc_CONFIG Register
+		// XG_ST=0,YG_ST=0,ZG_ST=0, FS_SEL=0 -> � 250 �/s
+		Data = 0x0;
+		HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, acc_CONFIG_REG, 1, &Data, 1,
+				i2c_timeout);
+
+		Data = 0x07;
+		HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, 0x68, 1, &Data, 1, i2c_timeout);
+
+		Data = 0xff;
+		HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, 0x23, 1, &Data, 1, i2c_timeout);
+
+		sprintf(MSG, "OKx1x \r\n");
+		HAL_UART_Transmit(&huart1, MSG, sizeof(MSG), 100);
+		return 0;
+	}
+	return 1;
+}
+void read_gylo() {
+
+	HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, 0x3B, I2C_MEMADD_SIZE_8BIT, gyloXYZ,
+			14, 1);
+}
 
 void read_Config() {
 	HAL_I2C_Mem_Read(&hi2c1, EEPROM_ADDR, CONFIG_ADDR, 2, &Config,
@@ -178,12 +255,12 @@ void write_Config() {
 	if (Config.Period < 2) {
 		Config.Period = 8;
 	}
-	sprintf(MSG, "PL : %d \r\n", Config.Period);
-	HAL_UART_Transmit(&huart1, MSG, sizeof(MSG), 100);
-	sprintf(MSG, "SizeConfig : %d \r\n", sizeof(Config));
-	HAL_UART_Transmit(&huart1, MSG, sizeof(MSG), 100);
-	HAL_I2C_Mem_Write(&hi2c1, EEPROM_ADDR, CONFIG_ADDR, 2, &Config,
-			sizeof(Config), 1000);
+//	sprintf(MSG, "PL : %d \r\n", Config.Period);
+//	HAL_UART_Transmit(&huart1, MSG, sizeof(MSG), 100);
+//	sprintf(MSG, "SizeConfig : %d \r\n", sizeof(Config));
+//	HAL_UART_Transmit(&huart1, MSG, sizeof(MSG), 100);
+//	HAL_I2C_Mem_Write(&hi2c1, EEPROM_ADDR, CONFIG_ADDR, 2, &Config,
+//			sizeof(Config), 1000);
 }
 void Set_limitvalue() {
 
@@ -234,51 +311,111 @@ int main(void) {
 	MX_ADC1_Init();
 	MX_CAN_Init();
 	MX_I2C1_Init();
-	MX_RTC_Init();
 	MX_SPI1_Init();
 	MX_TIM1_Init();
 	MX_TIM2_Init();
 	MX_USART1_UART_Init();
+	MX_RTC_Init();
 	MX_USART2_UART_Init();
-	MX_USB_DEVICE_Init();
 	MX_FATFS_Init();
+	TM1637_Init();
+	TM1637_SetBrightness(7);
+	TM1637_ClearDisplay();
+	while (MPU6050_Init(&hi2c1) == 1)
+		;
 	/* USER CODE BEGIN 2 */
 //	write_Config();
-	const char *DAYS_OF_WEEK[7] = { "Sunday", "Monday", "Tuesday", "Wednesday",
-			"Thursday", "Friday", "Saturday" };
 	/* Start DS1307 timing. Pass user I2C handle pointer to function. */
-	DS1307_Init(&hi2c1);
-	/* To test leap year correction. */
+//	DS1307_Init(&hi2c1);
+//	/* To test leap year correction. */
 //	DS1307_SetTimeZone(+7, 00);
-//	DS1307_SetDate(13);
+//	DS1307_SetDate(30);
 //	DS1307_SetMonth(10);
 //	DS1307_SetYear(2024);
-//	DS1307_SetHour(12);
+//	DS1307_SetHour(19);
 //	DS1307_SetMinute(45);
-//	DS1307_SetSecond(00);
-	read_Config();
+//	DS1307_SetSecond(10);
+//	read_Config();
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
+	short acc_x_raw;
+	short acc_y_raw;
+	short acc_z_raw;
+	float acc_x;
+	float acc_y;
+	float acc_z;
+	short gylo_x_raw;
+	short gylo_y_raw;
+	short gylo_z_raw;
+	float gylo_x;
+	float gylo_y;
+	float gylo_z;
 	while (1) {
-		uint8_t date = DS1307_GetDate();
-		uint8_t month = DS1307_GetMonth();
-		uint16_t year = DS1307_GetYear();
-		uint8_t hour = DS1307_GetHour();
-		uint8_t minute = DS1307_GetMinute();
-		uint8_t second = DS1307_GetSecond();
-		int8_t zone_hr = DS1307_GetTimeZoneHour();
-		uint8_t zone_min = DS1307_GetTimeZoneMin();
-		char buffer[100] = { 0 };
-		sprintf(buffer,
-				"TIMEZONE:+%02d:%02d , %04d-%02d-%02d , %02d:%02d:%02d%  \n",
-				zone_hr, zone_min, year, month, date, hour, minute, second);
-		/* May show warning below. Ignore and proceed. */
-//		CDC_Transmit_FS(buffer, strlen(buffer));
-		HAL_UART_Transmit(&huart1, buffer, strlen(buffer), 1000);
-		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-		HAL_Delay(500);
+		static uint32_t tk;
+		static bool state_tk;
+		static bool show_togleamp;
+		if (!state_tk) {
+			tk = HAL_GetTick();
+			state_tk = true;
+			show_togleamp = true;
+//			uint8_t date = DS1307_GetDate();
+//			uint8_t month = DS1307_GetMonth();
+//			uint16_t year = DS1307_GetYear();
+//			uint8_t hour = DS1307_GetHour();
+//			uint8_t minute = DS1307_GetMinute();
+//			uint8_t second = DS1307_GetSecond();
+//			int8_t zone_hr = DS1307_GetTimeZoneHour();
+//			uint8_t zone_min = DS1307_GetTimeZoneMin();
+//			sprintf(MSG,
+//					"TZ:+%02d:%02d,%04d-%02d-%02d,%02d:%02d:%02d%: tk = %d \r\n",
+//					zone_hr, zone_min, year, month, date, hour, minute, second,
+//					tk);
+//			/* May show warning below. Ignore and proceed. */
+			read_gylo();
+			acc_x_raw = (gyloXYZ[0] << 8) | gyloXYZ[1];
+			acc_y_raw = (gyloXYZ[2] << 8) | gyloXYZ[3];
+			acc_z_raw = (gyloXYZ[4] << 8) | gyloXYZ[5];
+			acc_x = acc_x_raw / 16384.f;
+			acc_y = acc_y_raw / 16384.f;
+			acc_z = acc_z_raw / 16384.f;
+
+			gylo_x_raw = (gyloXYZ[8] << 8) | gyloXYZ[9];
+			gylo_y_raw = (gyloXYZ[10] << 8) | gyloXYZ[11];
+			gylo_z_raw = (gyloXYZ[12] << 8) | gyloXYZ[13];
+
+			gylo_x = gylo_x_raw / 131.f;
+			gylo_y = gylo_y_raw / 131.f;
+			gylo_z = gylo_z_raw / 131.f;
+			sprintf(MSG, "tk = %d ax = %.2f ,ay = %.2f , az = %.2f \r\n", tk,
+					acc_x, acc_y, acc_z);
+			/* May show warning below. Ignore and proceed. */
+			HAL_UART_Transmit(&huart1, MSG, strlen(MSG), 100);
+
+			sprintf(MSG, "tk = %d glx = %.2f ,gly = %.2f , glz = %.2f \r\n", tk,
+					gylo_x, gylo_y, gylo_z);
+			/* May show warning below. Ignore and proceed. */
+			HAL_UART_Transmit(&huart1, MSG, strlen(MSG), 100);
+			TM1637_displayDecimal_only(genDegreefromAcc(acc_x));
+
+			HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+
+		} else {
+			uint32_t tt = HAL_GetTick();
+
+			if ((tt - tk) >= 250) {
+				if (show_togleamp) {
+					HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+					show_togleamp = false;
+				}
+			}
+			if ((tt - tk) >= 500) {
+				state_tk = false;
+			}
+		}
+
+//		HAL_Delay(50);
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -323,11 +460,9 @@ void SystemClock_Config(void) {
 	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
 		Error_Handler();
 	}
-	PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC | RCC_PERIPHCLK_ADC
-			| RCC_PERIPHCLK_USB;
+	PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC | RCC_PERIPHCLK_ADC;
 	PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
 	PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
-	PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
 	if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
 		Error_Handler();
 	}
@@ -545,10 +680,8 @@ static void MX_TIM1_Init(void) {
 
 	/* USER CODE END TIM1_Init 0 */
 
-	TIM_ClockConfigTypeDef sClockSourceConfig = { 0 };
 	TIM_MasterConfigTypeDef sMasterConfig = { 0 };
-	TIM_OC_InitTypeDef sConfigOC = { 0 };
-	TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = { 0 };
+	TIM_IC_InitTypeDef sConfigIC = { 0 };
 
 	/* USER CODE BEGIN TIM1_Init 1 */
 
@@ -560,14 +693,7 @@ static void MX_TIM1_Init(void) {
 	htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
 	htim1.Init.RepetitionCounter = 0;
 	htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-	if (HAL_TIM_Base_Init(&htim1) != HAL_OK) {
-		Error_Handler();
-	}
-	sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-	if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_TIM_PWM_Init(&htim1) != HAL_OK) {
+	if (HAL_TIM_IC_Init(&htim1) != HAL_OK) {
 		Error_Handler();
 	}
 	sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
@@ -576,32 +702,16 @@ static void MX_TIM1_Init(void) {
 			!= HAL_OK) {
 		Error_Handler();
 	}
-	sConfigOC.OCMode = TIM_OCMODE_PWM1;
-	sConfigOC.Pulse = 0;
-	sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-	sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-	sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-	sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-	sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-	if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1)
-			!= HAL_OK) {
-		Error_Handler();
-	}
-	sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-	sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-	sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-	sBreakDeadTimeConfig.DeadTime = 0;
-	sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-	sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-	sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-	if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig)
-			!= HAL_OK) {
+	sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+	sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+	sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+	sConfigIC.ICFilter = 0;
+	if (HAL_TIM_IC_ConfigChannel(&htim1, &sConfigIC, TIM_CHANNEL_1) != HAL_OK) {
 		Error_Handler();
 	}
 	/* USER CODE BEGIN TIM1_Init 2 */
 
 	/* USER CODE END TIM1_Init 2 */
-	HAL_TIM_MspPostInit(&htim1);
 
 }
 
@@ -636,6 +746,9 @@ static void MX_TIM2_Init(void) {
 	if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK) {
 		Error_Handler();
 	}
+	if (HAL_TIM_OC_Init(&htim2) != HAL_OK) {
+		Error_Handler();
+	}
 	if (HAL_TIM_PWM_Init(&htim2) != HAL_OK) {
 		Error_Handler();
 	}
@@ -645,14 +758,14 @@ static void MX_TIM2_Init(void) {
 			!= HAL_OK) {
 		Error_Handler();
 	}
-	sConfigOC.OCMode = TIM_OCMODE_PWM1;
+	sConfigOC.OCMode = TIM_OCMODE_TIMING;
 	sConfigOC.Pulse = 0;
 	sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
 	sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-	if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3)
-			!= HAL_OK) {
+	if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3) != HAL_OK) {
 		Error_Handler();
 	}
+	sConfigOC.OCMode = TIM_OCMODE_PWM1;
 	if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_4)
 			!= HAL_OK) {
 		Error_Handler();
@@ -750,7 +863,7 @@ static void MX_GPIO_Init(void) {
 	HAL_GPIO_WritePin(GPIOB, TM_CLK_Pin | TM_DIO_Pin | GPIO_PIN_2,
 			GPIO_PIN_RESET);
 
-	/*Configure GPIO pin : SIGNAL_LAMP_Pin_Pin */
+	/*Configure GPIO pin : LAMP_SIGNAL_Pin_Pin */
 	GPIO_InitStruct.Pin = SIGNAL_LAMP_Pin_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -764,18 +877,12 @@ static void MX_GPIO_Init(void) {
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-	/*Configure GPIO pins : PB12 PB13 PB14 PB3
-	 Bt_UP_Pin Bt_DOWN_Pin */
-	GPIO_InitStruct.Pin = GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_3
-			| Bt_UP_Pin | Bt_DOWN_Pin;
+	/*Configure GPIO pins : PB12 PB13 PB14 PB15
+	 PB3 Bt_UP_Pin Bt_DOWN_Pin */
+	GPIO_InitStruct.Pin = GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15
+			| GPIO_PIN_3 | Bt_UP_Pin | Bt_DOWN_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
 	GPIO_InitStruct.Pull = GPIO_PULLUP;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-	/*Configure GPIO pin : PB15 */
-	GPIO_InitStruct.Pin = GPIO_PIN_15;
-	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 	/*Configure GPIO pin : PA15 */
