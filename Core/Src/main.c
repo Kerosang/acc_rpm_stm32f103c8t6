@@ -388,16 +388,12 @@ int main(void) {
 			gylo_x = gylo_x_raw / 131.f;
 			gylo_y = gylo_y_raw / 131.f;
 			gylo_z = gylo_z_raw / 131.f;
-			sprintf(MSG, "tk = %d ax = %.2f ,ay = %.2f , az = %.2f \r\n", tk,
-					acc_x, acc_y, acc_z);
-			/* May show warning below. Ignore and proceed. */
+			float ab = genDegreefromAcc(acc_x);
+			double result = fabsf(ab);
+			sprintf(MSG, "tk = %d ax = %.2f ,ay = %.2f , az = %.2f , degree = %.2f \r\n", tk,
+					acc_x, acc_y, acc_z,ab);
 			HAL_UART_Transmit(&huart1, MSG, strlen(MSG), 100);
-
-			sprintf(MSG, "tk = %d glx = %.2f ,gly = %.2f , glz = %.2f \r\n", tk,
-					gylo_x, gylo_y, gylo_z);
-			/* May show warning below. Ignore and proceed. */
-			HAL_UART_Transmit(&huart1, MSG, strlen(MSG), 100);
-			TM1637_displayDecimal_only(genDegreefromAcc(acc_x));
+			TM1637_displayDecimal_only(result);
 
 			HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
 
